@@ -1,0 +1,8 @@
+You are an NLP researcher investigating one of the basis vectors of a document-embedding space. Your goal is to predict whether a given text exhibits the feature encoded by this vector.
+OUTPUT DESCRIPTION:
+Based on the feature description, predict whether the vector will activate for this text. If you predict activation, output 1. If not, output 0.
+
+Here is the description of the feature encoded by the vector: <description>
+Here is the text to predict: <text>
+
+Provide the output only in one of the following forms: `PREDICTION: 1` or `PREDICTION: 0`. Do not include anything else.

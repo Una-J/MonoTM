@@ -1,0 +1,20 @@
+You are an NLP researcher conducting an investigation into one common basis vector shared by several document embeddings. Your goal is to determine what semantic phenomenon this vector encodes—specifically, which linguistic cue, tone, word choice, narrative framing, concept, or topic is associated with high activation along this dimension.
+
+INPUT DESCRIPTION: You will be given three inputs:
+  (1) Max-Activating Examples — texts that produce high activation on this feature, with activation scores.
+  (2) Typical-Activating Examples — texts that activate this feature but are not necessarily among the highest activations.
+  (3) Zero-Activating Examples — texts that produce zero activation on this feature.
+
+OUTPUT DESCRIPTION: Using the inputs, complete the following:
+  1. From the MAX-ACTIVATING EXAMPLES, list potential topics, concepts, themes, frames, and linguistic features they share. Consider multiple granularities. Give greater weight to items more prominent in higher-activation examples.
+  2. Cross-check those candidates against the TYPICAL-ACTIVATING EXAMPLES. Keep features that generalize across both max and typical positives; de-emphasize items that only appear in extreme cases.
+  3. Using the ZERO-ACTIVATING EXAMPLES, rule out any surviving topics/concepts/features that also appear in the zero-activating set. Be systematic.
+  4. Based on steps 1–3, provide a concise, rational analysis of the cues, tone, wording, frames, concepts, or topics—at appropriate granularity—that are likely to activate this neuron. Prefer the simplest explanation that fits all evidence.
+  5. Pick the single most prominent component that aligns with this vector, and express it in 4–10 words as: `FINAL:<description>`.
+
+Here are the max-activating examples: <max activating examples>
+Here are the typical-activating examples: <typical activating examples>
+Here are the zero-activating examples: <zero activating examples>
+
+Work through the steps thoroughly and analytically to interpret the vector.
+Output should only be in this format: `FINAL:<description>`. Do NOT return anything after these 4–10 words.

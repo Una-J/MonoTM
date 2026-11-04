@@ -1,0 +1,15 @@
+{
+  "n_topics": 3,
+  "mixture": {"width": 0.0625, "k": 32, "steps": 1000, "batch_size": 64, "monitor_every": 100},
+  "interpretation": {"width": 0.0625, "k": 4, "steps": 1000, "batch_size": 64, "monitor_every": 100},
+  "min_support": 10,
+  "max_examples": 5,
+  "typical_examples": 5,
+  "zero_examples": 5,
+  "validation_examples": 10,
+  "min_validation_examples": 3,
+  "max_features": 20,
+  "lda_max_iter": 50,
+  "em_max_iter": 100,
+  "top_features": 5
+}
