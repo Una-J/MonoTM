@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass, field, fields
 import math
 from typing import Any
 
+from .generation import GenerationConfig, compatibility_issues
+
 
 @dataclass
 class SAEConfig:
@@ -56,6 +58,8 @@ class RunConfig:
     is_threshold: float = 0.8
     interpreter_model: str = "google/gemma-3-27b-it"
     predictor_model: str = "google/gemma-3-12b-it"
+    interpreter_generation: GenerationConfig = field(default_factory=GenerationConfig)
+    predictor_generation: GenerationConfig = field(default_factory=GenerationConfig)
     base_url: str = "https://api.deepinfra.com/v1/openai"
     llm_workers: int = 4
     llm_timeout: float = 180
@@ -70,6 +74,11 @@ class RunConfig:
     def validate(self):
         self.mixture.validate()
         self.interpretation.validate()
+        for role in ("interpreter", "predictor"):
+            generation = getattr(self, role + "_generation")
+            if not isinstance(generation, GenerationConfig):
+                raise ValueError(f"{role}_generation must be a GenerationConfig")
+            generation.validate()
         for key in ("n_topics", "embedding_batch_size", "embedding_max_length", "min_support",
                     "max_examples", "zero_examples", "validation_examples", "min_validation_examples",
                     "max_chars_per_document", "llm_workers", "llm_retries", "lda_max_iter", "em_max_iter",
@@ -105,6 +114,10 @@ class RunConfig:
     def to_dict(self):
         return asdict(self)
 
+    def generation_issues(self, roles=("interpreter", "predictor")):
+        return [message for role in roles for message in compatibility_issues(
+            self.base_url, getattr(self, role + "_model"), getattr(self, role + "_generation"), role)]
+
     @classmethod
     def from_dict(cls, values: dict[str, Any]):
         if not isinstance(values, dict):
@@ -123,6 +136,10 @@ class RunConfig:
                     raise ValueError(f"Unknown {key} SAE keys: {', '.join(sorted(unknown_sae))}")
                 base.update(values[key])
                 values[key] = SAEConfig(**base)
+        for role in ("interpreter", "predictor"):
+            key = role + "_generation"
+            if key in values:
+                values[key] = GenerationConfig.from_dict(values[key])
         try:
             config = cls(**values)
             config.validate()

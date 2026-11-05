@@ -144,8 +144,18 @@ def validate_features(features, corpus, config, chat, *, feature_ids=None, exist
             return record
         examples_by_id = {key: [corpus.ids[i] for i in rows] for key, rows in examples.items()}
         record["examples"] = examples_by_id
-        provenance = {"base_url": getattr(chat, "base_url", config.base_url),
-                      "max_tokens": getattr(chat, "max_tokens", 1024), "operation_id": operation_id}
+        def provenance(role):
+            result = {"base_url": getattr(chat, "base_url", config.base_url), "operation_id": operation_id}
+            if hasattr(chat, "generation_settings"):
+                settings = chat.generation_settings(role)
+                result["generation"] = settings
+                result["request_parameters"] = {settings["token_limit_parameter"]: settings["token_limit"]}
+                for key in ("temperature", "reasoning_effort"):
+                    if settings[key] is not None:
+                        result["request_parameters"][key] = settings[key]
+            else:
+                result["max_tokens"] = getattr(chat, "max_tokens", None)
+            return result
         context = {"feature_id": int(feature), "operation_id": operation_id}
 
         def document(row):
@@ -170,7 +180,7 @@ def validate_features(features, corpus, config, chat, *, feature_ids=None, exist
                 label = old["label"]
                 record["interpreter"] = deepcopy(old.get("interpreter", {"source": "previous_run"}))
             else:
-                record["interpreter"] = {**provenance, "model": config.interpreter_model, "source": "llm"}
+                record["interpreter"] = {**provenance("interpreter"), "model": config.interpreter_model, "source": "llm"}
                 checkpoint(record)
                 label = parse_label(chat.complete(prompt, config.interpreter_model,
                                                   validator=lambda s: parse_label(s) is not None,
@@ -178,7 +188,7 @@ def validate_features(features, corpus, config, chat, *, feature_ids=None, exist
             if label is None:
                 raise LLMError("Interpreter did not provide a label")
             record["label"] = label
-            record["predictor"] = {**provenance, "model": config.predictor_model, "source": "llm"}
+            record["predictor"] = {**provenance("predictor"), "model": config.predictor_model, "source": "llm"}
             predictions, truth = [], []
             record.update(predictions=predictions, ground_truth=truth, validation_document_ids=[])
             checkpoint(record)
@@ -203,7 +213,7 @@ def validate_features(features, corpus, config, chat, *, feature_ids=None, exist
                           predictions=predictions, ground_truth=truth)
         except LLMError as exc:
             stop.set()
-            record.update(status="llm_failed", error=str(exc))
+            record.update(status="llm_failed", error=str(exc), error_kind=exc.kind)
         finally:
             checkpoint(record)
         return record

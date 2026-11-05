@@ -238,13 +238,14 @@ class RecoveryTests(PipelineFixture, unittest.TestCase):
             code = main(["retry", "--run", str(root), "--input", str(self.input), "--features", str(feature),
                          "--interpreter-model", "i2", "--predictor-model", "p2", "--max-tokens", "2048"])
         self.assertEqual(code, 0)
-        self.assertEqual(client.call_args.kwargs["max_tokens"], 2048)
+        self.assertEqual(client.call_args.kwargs["stage_options"]["interpreter"].token_limit, 2048)
+        self.assertEqual(client.call_args.kwargs["stage_options"]["predictor"].token_limit, 2048)
 
 
 class AttemptHistoryTests(unittest.TestCase):
     @staticmethod
     def response(content):
-        return io.BytesIO(json.dumps({"choices": [{"message": {"content": content}, "finish_reason": "length"}]}).encode())
+        return io.BytesIO(json.dumps({"choices": [{"message": {"content": content}, "finish_reason": "stop"}]}).encode())
 
     def test_failed_raw_reply_prompt_and_context_persist_then_refresh_bypasses_cache(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -264,7 +265,7 @@ class AttemptHistoryTests(unittest.TestCase):
             self.assertEqual(failure["response"], "unfinished reasoning")
             self.assertEqual(failure["request"]["messages"][0]["content"], "original prompt")
             self.assertEqual(failure["request"]["max_tokens"], 2048)
-            self.assertEqual(failure["finish_reason"], "length")
+            self.assertEqual(failure["finish_reason"], "stop")
             self.assertEqual(failure["context"], context)
             self.assertEqual(len(attempts), 4)
             for path in Path(folder).rglob("*.json"):

@@ -5,6 +5,7 @@ from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -12,13 +13,15 @@ from uuid import uuid4
 
 import numpy as np
 
-from .config import RunConfig
+from .config import GenerationConfig, RunConfig
 from .data import load_corpus, write_json
 from .interpretation import PROMPT_DIR, validate_features
 from .llm import ChatClient
 from .pipeline import (_file_hash, _versions, finish_validation, rebuild_descriptors,
                        saved_validation_records, validation_checkpoint, validation_records, write_feature_scores)
 from .sae import SAEFeatures
+
+logger = logging.getLogger(__name__)
 
 TERMINAL = ("validated", "insufficient_examples")
 DESCRIPTORS = ("beta.npy", "topics.json", "topic_features.csv", "vocabulary.csv",
@@ -62,8 +65,8 @@ def inspect_run(output_dir, *, feature_id=None):
 
 def retry_features(output_dir, input_csv, *, feature_ids=None, failed=False, stage="both",
                    interpreter_model=None, predictor_model=None, base_url=None,
-                   refresh=None, max_tokens=1024, label=None, text_column=None,
-                   id_column=None, chat_client=None):
+                   refresh=None, max_tokens=None, label=None, text_column=None,
+                   id_column=None, chat_client=None, interpreter_generation=None, predictor_generation=None):
     """Repair selected LLM stages and rebuild B, without embeddings/SAE/LDA fitting.
 
     Explicit feature IDs default to fresh requests, including well-formed cached
@@ -77,9 +80,9 @@ def retry_features(output_dir, input_csv, *, feature_ids=None, failed=False, sta
         raise ValueError("Select either feature_ids or failed=True")
     if stage not in ("both", "predictor"):
         raise ValueError("stage must be both or predictor")
-    if stage == "predictor" and (label is not None or interpreter_model is not None):
-        raise ValueError("Predictor-only retry retains its label; omit --label and --interpreter-model")
-    if not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens < 1:
+    if stage == "predictor" and (label is not None or interpreter_model is not None or interpreter_generation is not None):
+        raise ValueError("Predictor-only retry retains its label; omit --label and Interpreter overrides")
+    if max_tokens is not None and (not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or max_tokens < 1):
         raise ValueError("max_tokens must be a positive integer")
     lock_path = output_dir / "run.lock"
     try:
@@ -126,14 +129,31 @@ def retry_features(output_dir, input_csv, *, feature_ids=None, failed=False, sta
         for name, value in (("interpreter_model", interpreter_model), ("predictor_model", predictor_model), ("base_url", base_url)):
             if value is not None:
                 setattr(config, name, value)
+        for role, overrides in (("interpreter", interpreter_generation), ("predictor", predictor_generation)):
+            values = overrides.to_dict() if isinstance(overrides, GenerationConfig) else (overrides if overrides is not None else {})
+            if not isinstance(values, dict):
+                raise ValueError(f"{role}_generation must be a GenerationConfig or a dictionary")
+            if max_tokens is not None:
+                if "token_limit" in values:
+                    raise ValueError("Use either max_tokens/--max-tokens or stage-specific token_limit overrides")
+                values = {**values, "token_limit": max_tokens}
+            setattr(config, role + "_generation", GenerationConfig.from_dict(values, base=getattr(config, role + "_generation")))
         config.validate()
         refresh = not failed if refresh is None else refresh
         chat = chat_client
         if chat is None and selected:
+            roles = ("predictor",) if stage == "predictor" or label is not None else ("interpreter", "predictor")
+            issues = config.generation_issues(roles)
+            if issues:
+                raise ValueError(" ".join(issues))
+            for role in roles:
+                logger.info("Retry %s (%s): request parameters %s", role, getattr(config, role + "_model"),
+                            json.dumps(getattr(config, role + "_generation").request_parameters(), sort_keys=True))
             chat = ChatClient(base_url=config.base_url,
                               api_key=os.environ.get("MONOTM_API_KEY") or os.environ.get("DEEPINFRA_API_KEY"),
                               cache_dir=output_dir / "cache/llm", timeout=config.llm_timeout,
-                              retries=config.llm_retries, max_tokens=max_tokens)
+                              retries=config.llm_retries,
+                              stage_options={role: getattr(config, role + "_generation") for role in ("interpreter", "predictor")})
         prompt_dir = output_dir / "cache/prompts"
         if not all((prompt_dir / name).is_file() for name in ("interpreter.txt", "predictor.txt")):
             prompt_dir = PROMPT_DIR  # Use bundled templates when no saved snapshot is present.
@@ -151,7 +171,8 @@ def retry_features(output_dir, input_csv, *, feature_ids=None, failed=False, sta
         operation = {"operation_id": operation_id, "feature_ids": selected, "stage": stage,
                      "refresh": refresh, "interpreter_model": config.interpreter_model,
                      "predictor_model": config.predictor_model, "base_url": config.base_url,
-                     "max_tokens": max_tokens, "manual_label": label is not None, "status": "running",
+                     "generation": {role: getattr(config, role + "_generation").to_dict() for role in ("interpreter", "predictor")},
+                     "manual_label": label is not None, "status": "running",
                      "source_hashes": source_hashes, "versions": _versions(),
                      "prompt_hashes": {p.name: _file_hash(p) for p in prompt_dir.glob("*.txt")}}
         manifest.setdefault("recovery_history", []).append(operation)

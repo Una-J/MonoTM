@@ -182,9 +182,14 @@ def check_run(input_csv=None, output_dir=None, *, config=None, text_column="text
                      "location": "loopback endpoint" if urlparse(endpoint).hostname in ("localhost", "127.0.0.1", "::1") else "configured endpoint",
                      "device": "managed by endpoint, independent of --device",
                      "requests_per_feature_max": 1 + 2 * config.validation_examples}
+    report["llm"]["request_parameters"] = {role: getattr(config, role + "_generation").request_parameters()
+                                              for role in ("interpreter", "predictor")}
+    if report["llm"]["requests_needed"] and endpoint != "<invalid endpoint>":
+        errors.extend(config.generation_issues())
     if report["llm"]["requests_needed"] and not key_present:
         errors.append("Set MONOTM_API_KEY or DEEPINFRA_API_KEY for the configured chat endpoint.")
     notes.append("Model availability/downloads, endpoint connectivity/authentication and GPU memory fit are not checked.")
+    notes.append("Generation compatibility checks cover documented model IDs on official endpoints; aliases and other models are checked by the provider during execution.")
     report["ready"] = not errors
     return report
 
@@ -215,6 +220,11 @@ def format_report(report):
               f"API key: {'registered via ' + report['llm']['key_source'] if report['llm']['key_present'] else 'not registered'} (value hidden)",
               f"Validation: support >= {config['min_support']}, IS >= {config['is_threshold']}, feature cap={config['max_features'] or 'all eligible'}",
               f"LLM work: up to {report['llm']['requests_per_feature_max']} requests per feature before cache/retries"]
+    for role in ("interpreter", "predictor"):
+        parameters = report["llm"]["request_parameters"][role]
+        lines.append(f"  {role.title()} request parameters: {json.dumps(parameters, sort_keys=True)}")
+        if "temperature" not in parameters:
+            lines.append(f"    {role.title()} temperature: omitted (provider default)")
     if report["notes"]:
         lines += ["", "Check scope:"] + [f"  - {note}" for note in report["notes"]]
     if report["errors"]:

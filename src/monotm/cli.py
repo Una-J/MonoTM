@@ -8,7 +8,39 @@ from pathlib import Path
 import sys
 
 from . import __version__
-from .config import RunConfig
+from .config import GenerationConfig, RunConfig
+from .generation import REASONING_EFFORTS, TOKEN_PARAMETERS
+
+
+def _temperature(value):
+    if value.lower() in ("none", "null", "omit"):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Use a number, or none to omit temperature") from None
+
+
+def _generation_options(parser):
+    for role in ("interpreter", "predictor"):
+        parser.add_argument(f"--{role}-temperature", type=_temperature, default=argparse.SUPPRESS,
+                            help=f"{role.title()} temperature; use none to omit the parameter")
+        parser.add_argument(f"--{role}-token-limit", type=int, default=argparse.SUPPRESS,
+                            help=f"{role.title()} token budget; includes reasoning with max_completion_tokens")
+        parser.add_argument(f"--{role}-token-limit-parameter", choices=TOKEN_PARAMETERS, default=argparse.SUPPRESS,
+                            help="Send exactly this token-limit field")
+        parser.add_argument(f"--{role}-reasoning-effort", choices=(*REASONING_EFFORTS, "omit"), default=argparse.SUPPRESS,
+                            help="Reasoning effort; omit leaves the field out, none explicitly sends none")
+
+
+def _generation_overrides(args, role):
+    result = {}
+    for name in ("temperature", "token_limit", "token_limit_parameter", "reasoning_effort"):
+        key = role + "_" + name
+        if hasattr(args, key):
+            value = getattr(args, key)
+            result[name] = None if name == "reasoning_effort" and value == "omit" else value
+    return result
 
 
 def _run_options(run, *, required):
@@ -27,6 +59,7 @@ def _run_options(run, *, required):
     run.add_argument("--predictor-model")
     run.add_argument("--workers", type=int, help="Parallel feature validations")
     run.add_argument("--max-features", type=int, help="Validate at most this many features, ranked by support")
+    _generation_options(run)
 
 
 def _resolve_config(args):
@@ -37,6 +70,9 @@ def _resolve_config(args):
         value = getattr(args, arg)
         if value is not None:
             setattr(config, target, value)
+    for role in ("interpreter", "predictor"):
+        setattr(config, role + "_generation", GenerationConfig.from_dict(
+            _generation_overrides(args, role), base=getattr(config, role + "_generation")))
     config.validate()
     return config
 
@@ -70,7 +106,8 @@ def main(argv=None):
     retry.add_argument("--interpreter-model")
     retry.add_argument("--predictor-model")
     retry.add_argument("--base-url", help="OpenAI-compatible chat base URL; use MONOTM_API_KEY for its credential")
-    retry.add_argument("--max-tokens", type=int, default=1024, help="Output-token limit per request (default: 1024)")
+    retry.add_argument("--max-tokens", type=int, help="Token-budget override for both roles, using each role's selected field")
+    _generation_options(retry)
     retry.add_argument("--label", help="Manual label for exactly one --features ID; always runs Predictor validation")
     retry.add_argument("--text-column", help="Defaults to the column recorded in run.json")
     retry.add_argument("--id-column", help="ID column override; defaults to the column recorded in run.json")
@@ -111,7 +148,9 @@ def main(argv=None):
                                     stage=args.stage, interpreter_model=args.interpreter_model,
                                     predictor_model=args.predictor_model, base_url=args.base_url,
                                     refresh=args.refresh, max_tokens=args.max_tokens, label=args.label,
-                                    text_column=args.text_column, id_column=args.id_column)
+                                    text_column=args.text_column, id_column=args.id_column,
+                                    interpreter_generation=_generation_overrides(args, "interpreter") or None,
+                                    predictor_generation=_generation_overrides(args, "predictor") or None)
             print(f"Rebuilt topic descriptors in {result['output_dir']}; SAE/LDA and theta.npy reused")
             return 0
         config = _resolve_config(args)

@@ -16,7 +16,7 @@ import numpy as np
 from scipy import sparse
 
 from . import __version__
-from .config import RunConfig
+from .config import GenerationConfig, RunConfig
 from .data import load_corpus, load_embeddings, validate_corpus_size, write_csv, write_json
 from .embeddings import embed_documents
 from .interpretation import PROMPT_DIR, pending_records, validate_features
@@ -58,7 +58,12 @@ def _versions():
 def run_fingerprint(corpus, config, embeddings_path=None, embedding_ids_path=None, chat_client=None, embedder=None):
     """The same run identity is used by read-only checks and execution."""
     versions = _versions()
-    identity = {"corpus": corpus.fingerprint, "config": config.to_dict(), "versions": versions,
+    identity_config = config.to_dict()
+    for role in ("interpreter", "predictor"):
+        key = role + "_generation"
+        if identity_config[key] == GenerationConfig().to_dict():
+            identity_config.pop(key)
+    identity = {"corpus": corpus.fingerprint, "config": identity_config, "versions": versions,
                 "embedding_file": _file_hash(embeddings_path), "embedding_ids": _file_hash(embedding_ids_path),
                 "prompts": {p.name: _file_hash(p) for p in sorted(PROMPT_DIR.glob("*.txt"))},
                 "custom_chat": type(chat_client).__qualname__ if chat_client is not None else None,
@@ -118,7 +123,10 @@ def validation_checkpoint(output_dir, records):
 def finish_validation(output_dir, manifest, records):
     write_feature_scores(output_dir, records)
     if any(r["status"] not in ("validated", "insufficient_examples") for r in records):
-        raise LLMError("Feature validation is incomplete. Use monotm inspect and monotm retry --failed; completed training is saved.")
+        failure = next((r for r in records if r.get("error")), None)
+        detail = f" Feature {failure['feature_id']}: {failure['error']}" if failure else ""
+        raise LLMError("Feature validation is incomplete." + detail
+                       + " Use monotm inspect and monotm retry --failed; completed training is saved.")
     write_json(output_dir / "cache/validated_features.json", records)
     (output_dir / "cache/validation.partial.json").unlink(missing_ok=True)
     if "validation" not in manifest["completed_stages"]:
@@ -233,9 +241,13 @@ def run(input_csv, output_dir, *, config=None, text_column="text", id_column=Non
         validation_path = cache / "validated_features.json"
         chat = chat_client
         if not cached("validation", validation_path) and chat is None:
+            issues = config.generation_issues()
+            if issues:
+                raise ValueError(" ".join(issues))
             chat = ChatClient(base_url=config.base_url,
                               api_key=os.environ.get("MONOTM_API_KEY") or os.environ.get("DEEPINFRA_API_KEY"),
-                              cache_dir=cache / "llm", timeout=config.llm_timeout, retries=config.llm_retries)
+                              cache_dir=cache / "llm", timeout=config.llm_timeout, retries=config.llm_retries,
+                              stage_options={role: getattr(config, role + "_generation") for role in ("interpreter", "predictor")})
 
         embedding_cache = cache / "embeddings.npy"
         if cached("embeddings", embedding_cache):

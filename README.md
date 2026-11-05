@@ -183,9 +183,52 @@ Rerun the same command to reuse completed stages and cached successful LLM calls
 
 Support and activation targets use **strictly positive values**. Predictor documents are disjoint from all documents shown to the Interpreter. Validation uses balanced positive/negative sets of up to 30 documents each. The actual count is recorded, and features with too few held-out examples are skipped.
 
-Invalid API responses are retried. If API calls fail, the run stops with successful calls cached and feature progress saved incrementally. If no labels pass validation, mixtures remain saved in `theta.npy` and scores in `feature_scores.csv`. Only validated labels meeting the configured thresholds are used for topic descriptions. Individual labels can be revised and revalidated with `retry`.
+Malformed responses and transient API failures are retried. Rejected request parameters and replies with `finish_reason: "length"` stop immediately; MonoTM does not silently change parameters or increase token budgets. If API calls fail, the run stops with successful calls cached and feature progress saved incrementally. If no labels pass validation, mixtures remain saved in `theta.npy` and scores in `feature_scores.csv`. Only validated labels meeting the configured thresholds are used for topic descriptions. Individual labels can be revised and revalidated with `retry`.
 
 Response caches and attempt logs contain document excerpts. Run directories under `runs/` are excluded from Git.
+
+## LLM generation settings
+
+Interpreter and Predictor have independent `interpreter_generation` and `predictor_generation` objects in the JSON configuration:
+
+| Setting | Default | Behavior |
+|---|---|---|
+| `temperature` | `0.0` | Send this value; JSON `null` omits the field entirely |
+| `token_limit` | `1024` | Positive token budget for this role |
+| `token_limit_parameter` | `"max_tokens"` | Choose `"max_tokens"` or `"max_completion_tokens"`; only one is sent |
+| `reasoning_effort` | `null` | Omit by default, or send a model-supported effort value |
+
+`reasoning_effort: "none"` explicitly requests no reasoning; `null` leaves the choice to the provider. Not every model supports every effort value. Temperature omission uses the provider's default and does not mean temperature zero.
+
+For OpenAI reasoning models served through Chat Completions, select `max_completion_tokens` and omit unsupported temperature settings. For example, these entries can be added to a run configuration:
+
+```json
+{
+  "base_url": "https://api.openai.com/v1",
+  "interpreter_model": "o3",
+  "predictor_model": "o4-mini",
+  "interpreter_generation": {
+    "temperature": null,
+    "token_limit_parameter": "max_completion_tokens",
+    "token_limit": 4096,
+    "reasoning_effort": "low"
+  },
+  "predictor_generation": {
+    "temperature": null,
+    "token_limit_parameter": "max_completion_tokens",
+    "token_limit": 4096,
+    "reasoning_effort": "low"
+  }
+}
+```
+
+The example budget is illustrative. `max_completion_tokens` includes reasoning and visible output, so even a short label may need more than the default budget. Review the provider's [Chat Completions parameter reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) and model limits. These options configure Chat Completions; models requiring Responses or native Anthropic Messages need a custom backend.
+
+`monotm check` and `monotm run --dry-run` display the exact parameters that will be sent for each role. Known incompatible combinations on official OpenAI and Anthropic endpoints are blocked before training or requests. These checks do not cover every model, proxy or alias; the provider validates other combinations during execution. Explicit values are never automatically removed or substituted. If the provider rejects a parameter, inspect the raw response and adjust the indicated generation setting.
+
+The same settings are available as CLI overrides on `check`, `run`, and `retry`: `--interpreter-temperature`, `--interpreter-token-limit`, `--interpreter-token-limit-parameter`, and `--interpreter-reasoning-effort`, plus the corresponding `--predictor-*` options. Use `--interpreter-temperature none` to omit temperature. For reasoning effort, `--interpreter-reasoning-effort omit` omits the field while `--interpreter-reasoning-effort none` sends the string `"none"`.
+
+In Python, use `GenerationConfig` from `monotm.config` for either role, for example `RunConfig(interpreter_generation=GenerationConfig(temperature=None, token_limit_parameter="max_completion_tokens", token_limit=4096))`.
 
 ## Inspect and retry features without retraining
 
@@ -200,7 +243,7 @@ monotm inspect --run runs/my_corpus --feature 17
 monotm inspect --run runs/my_corpus --feature 17 --output feature_17.json
 ```
 
-The feature view includes its label, support, example document IDs, predictions, IS, model provenance, and request attempts. Each attempt contains the **submitted prompt**, model and endpoint, response text, raw HTTP response body, finish reason (when supplied by the provider), and error/status. Predictor attempts also identify the document. `finish_reason: "length"` indicates a truncated reply; increase `--max-tokens` when retrying. Network failures may have no response body. Credentials are omitted or redacted.
+The feature view includes its label, support, example document IDs, predictions, IS, model provenance, and request attempts. Each attempt contains the **submitted prompt**, actual request parameters, model and endpoint, response text, raw HTTP response body, finish reason and token usage (when supplied by the provider), and error/status. Predictor attempts also identify the document. `finish_reason: "length"` is recorded as `status: "truncated"`, with feature `error_kind: "token_limit"`. Such replies are not cached or accepted, even when they contain a parseable label. Increase that role's token budget or select a supported lower reasoning effort when retrying. Network failures may have no response body. Credentials are omitted or redacted.
 
 Retry particular features, optionally changing either model:
 
@@ -211,6 +254,17 @@ monotm retry --run runs/my_corpus --input my_documents.csv --features 17 29 \
 ```
 
 Model options default to the models recorded in the run. The default endpoint is DeepInfra (`https://api.deepinfra.com/v1/openai`), with Interpreter `google/gemma-3-27b-it` and Predictor `google/gemma-3-12b-it`. Add `--base-url` and set `MONOTM_API_KEY` to use another OpenAI-compatible provider. Overrides apply to the selected features in the current retry operation and are recorded in feature metadata and recovery history. Supply the overrides again in subsequent commands to use the same replacement models.
+
+Generation overrides inherit unspecified fields from the original run and are also recorded per role. To repair a parameter rejection without repeating SAE/LDA training:
+
+```bash
+monotm retry --run runs/my_corpus --input my_documents.csv --failed \
+  --interpreter-temperature none \
+  --interpreter-token-limit-parameter max_completion_tokens \
+  --interpreter-token-limit 4096
+```
+
+Apply Predictor overrides too if its model requires them. `--max-tokens 2048` remains a shorthand to change both token budgets, using each role's selected token-limit field. Do not combine it with a stage-specific token-limit override. Increasing a budget may increase API cost; it is never done automatically.
 
 | Selection or option | Behavior |
 |---|---|
@@ -259,7 +313,7 @@ updated = retry_features("runs/my_corpus", "my_documents.csv", feature_ids=[17],
                          predictor_model="your-predictor-model")
 ```
 
-Custom `chat_client` backends used through the Python API must implement `complete(prompt, model, *, validator=None, context=None, refresh=False)`. The built-in `ChatClient` provides disk caching and raw attempt history; custom clients manage their own response history.
+Custom `chat_client` backends used through the Python API must implement `complete(prompt, model, *, validator=None, context=None, refresh=False)`. The built-in `ChatClient` applies the generation settings and provides disk caching and raw attempt history; custom clients manage their own generation parameters and response history.
 
 ## Small synthetic example
 

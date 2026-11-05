@@ -55,9 +55,15 @@ def main():
                 payload = json.loads(self.rfile.read(size))
                 if payload.get("model") != args.model:
                     raise ValueError(f"The configured model is {args.model}")
-                limit = min(int(payload.get("max_tokens", 128)), args.max_new_tokens)
+                if "max_tokens" in payload and "max_completion_tokens" in payload:
+                    raise ValueError("Use only one token-limit field")
+                if payload.get("temperature", 0) not in (None, 0):
+                    raise ValueError("This loopback server supports temperature=0 or omitted temperature only")
+                if "reasoning_effort" in payload:
+                    raise ValueError("reasoning_effort is not supported by this loopback server")
+                limit = min(int(payload.get("max_completion_tokens", payload.get("max_tokens", 128))), args.max_new_tokens)
                 if limit < 1:
-                    raise ValueError("max_tokens must be positive")
+                    raise ValueError("Token limit must be positive")
                 guidance = None if "PREDICTION:" in payload["messages"][-1]["content"] else LABEL_FORMAT
                 messages = ([{"role": "system", "content": guidance}] if guidance else []) + payload["messages"]
                 text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
