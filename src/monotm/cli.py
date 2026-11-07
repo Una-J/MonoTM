@@ -46,7 +46,7 @@ def _generation_overrides(args, role):
 def _run_options(run, *, required):
     run.add_argument("--input", required=required, type=Path, help="UTF-8 CSV with one nonempty document per row")
     run.add_argument("--output", required=required, type=Path, help="Empty directory or matching existing run")
-    run.add_argument("--topics", required=required, type=int, help="Number of topics; overrides JSON n_topics")
+    run.add_argument("--topics", type=int, help="Number of topics; overrides JSON n_topics and lda_params.n_components")
     run.add_argument("--text-column", default="text")
     run.add_argument("--id-column", help="Optional unique string ID column; otherwise generated from row order")
     run.add_argument("--config", type=Path, help="JSON config; --topics and explicitly supplied options override it")
@@ -70,6 +70,8 @@ def _resolve_config(args):
         value = getattr(args, arg)
         if value is not None:
             setattr(config, target, value)
+            if target == "n_topics":
+                config.lda_params = {**config.lda_params, "n_components": value}
     for role in ("interpreter", "predictor"):
         setattr(config, role + "_generation", GenerationConfig.from_dict(
             _generation_overrides(args, role), base=getattr(config, role + "_generation")))
@@ -117,7 +119,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "config":
-            text = json.dumps(RunConfig().to_dict(), indent=2) + "\n"
+            config = RunConfig()
+            values = config.to_dict()
+            values["lda_params"] = config.lda_parameters()
+            for alias in ("n_topics", "lda_max_iter", "lda_jobs"):
+                values.pop(alias)
+            text = json.dumps(values, indent=2) + "\n"
             if args.output:
                 with args.output.open("x", encoding="utf-8") as handle:
                     handle.write(text)

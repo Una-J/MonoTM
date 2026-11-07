@@ -6,6 +6,7 @@ import math
 from typing import Any
 
 from .generation import GenerationConfig, compatibility_issues
+from .lda_config import lda_parameters, validate_lda_parameters
 
 
 @dataclass
@@ -65,13 +66,19 @@ class RunConfig:
     llm_timeout: float = 180
     llm_retries: int = 3
     lda_max_iter: int = 200
-    lda_jobs: int = 1
+    lda_jobs: int | None = 1
+    lda_params: dict[str, Any] = field(default_factory=dict)
     em_max_iter: int = 200
     em_tolerance: float = 1e-6
     em_batch_size: int = 4096
     top_features: int = 10
 
     def validate(self):
+        parameters = self.lda_parameters()
+        validate_lda_parameters(parameters)
+        self.n_topics = parameters["n_components"]
+        self.lda_max_iter = parameters["max_iter"]
+        self.lda_jobs = parameters["n_jobs"]
         self.mixture.validate()
         self.interpretation.validate()
         for role in ("interpreter", "predictor"):
@@ -81,7 +88,7 @@ class RunConfig:
             generation.validate()
         for key in ("n_topics", "embedding_batch_size", "embedding_max_length", "min_support",
                     "max_examples", "zero_examples", "validation_examples", "min_validation_examples",
-                    "max_chars_per_document", "llm_workers", "llm_retries", "lda_max_iter", "em_max_iter",
+                    "max_chars_per_document", "llm_workers", "llm_retries", "em_max_iter",
                     "em_batch_size", "top_features"):
             value = getattr(self, key)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -100,8 +107,6 @@ class RunConfig:
             raise ValueError("em_tolerance must be finite and positive")
         if not math.isfinite(self.llm_timeout) or self.llm_timeout <= 0:
             raise ValueError("llm_timeout must be finite and positive")
-        if self.lda_jobs == 0 or not isinstance(self.lda_jobs, int):
-            raise ValueError("lda_jobs must be a nonzero integer")
         for key in ("device", "embedding_model", "interpreter_model", "predictor_model", "base_url"):
             value = getattr(self, key)
             if not isinstance(value, str) or not value.strip():
@@ -113,6 +118,9 @@ class RunConfig:
 
     def to_dict(self):
         return asdict(self)
+
+    def lda_parameters(self):
+        return lda_parameters(self)
 
     def generation_issues(self, roles=("interpreter", "predictor")):
         return [message for role in roles for message in compatibility_issues(

@@ -102,6 +102,37 @@ monotm run --input my_documents.csv --topics 20 --output runs/custom \
   --interpreter-model your-interpreter-model --predictor-model your-predictor-model
 ```
 
+## Scikit-learn LDA parameters
+
+The `lda_params` dictionary uses the constructor names of scikit-learn's [`LatentDirichletAllocation`](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.LatentDirichletAllocation.html). `monotm config` writes the complete dictionary, and the first settings cell in [examples/start_here.ipynb](examples/start_here.ipynb) lists every parameter with an explanation. Edit the values directly:
+
+| Parameter | MonoTM default | Purpose |
+|---|---|---|
+| `n_components` | `20` | Topic count throughout MonoTM, including Θ and descriptor outputs |
+| `doc_topic_prior` | `null` | Document-topic prior; `null` uses `1 / n_components` |
+| `topic_word_prior` | `null` | Topic-feature prior; `null` uses `1 / n_components` |
+| `learning_method` | `"batch"` | `"batch"` or `"online"` variational Bayes |
+| `learning_decay` | `0.7` | Learning-rate decay for online updates |
+| `learning_offset` | `10.0` | Offset for online updates |
+| `max_iter` | `200` | Maximum fitting iterations |
+| `batch_size` | `128` | Mini-batch size for online updates |
+| `evaluate_every` | `-1` | Perplexity evaluation frequency; nonpositive values disable it |
+| `total_samples` | `1000000.0` | Used by scikit-learn's `partial_fit`; inactive in this fit workflow |
+| `perp_tol` | `0.1` | Perplexity convergence tolerance when evaluation is enabled |
+| `mean_change_tol` | `0.001` | Document-topic inference convergence tolerance |
+| `max_doc_update_iter` | `100` | Maximum document-topic inference iterations |
+| `n_jobs` | `1` | CPU parallelism; `-1` uses all available CPUs, `null` uses the joblib default |
+| `verbose` | `0` | Logging verbosity |
+| `random_state` | Pipeline `seed` (`42`) | LDA-specific integer seed; `null` uses scikit-learn's random generator |
+
+For JSON, use numbers, strings, and `null`; in Python use `None` for `null`. A `RandomState` object is not accepted because run settings are saved as JSON. `random_state` can be set independently of the pipeline seed used for SAE training and example sampling.
+
+`lda_params` takes precedence over the fallback aliases `n_topics`, `lda_max_iter`, and `lda_jobs`. If `n_components` is supplied, MonoTM uses it as the topic count for all stages. An explicit CLI `--topics` overrides both `n_topics` and `lda_params.n_components`. The CLI flag is optional when the topic count is provided in the configuration. Defaults apply when it is omitted from both.
+
+`monotm check` displays all resolved constructor parameters and identifies inactive options. Batch learning does not use `learning_decay`, `learning_offset`, or `batch_size`. `perp_tol` is inactive when `evaluate_every <= 0`. This pipeline calls `fit_transform`, so `total_samples`, which controls `partial_fit`, is always inactive here. Invalid values and constructor keywords are rejected before SAE training or model downloads. Accepted parameters are forwarded to scikit-learn and recorded in `run.json`.
+
+Changing LDA settings changes the fitted topic mixtures and requires a new run directory. `retry` repairs LLM validation and descriptors while retaining the saved LDA mixtures.
+
 ## Review setup before running
 
 `monotm check` displays the actual settings after merging defaults, JSON, and explicit CLI overrides. It does not download models, train, contact the chat endpoint, or create/modify a run directory.
@@ -119,7 +150,7 @@ The report shows:
 | Hardware | PyTorch/CUDA build, visible GPU names, total/free VRAM, Apple MPS availability |
 | Selected device | Requested `auto`/`cpu`/`cuda:0` and the device actually selected |
 | Execution | Which stages train, fit on CPU, use the chat endpoint, or reuse saved results |
-| LDA | Topic count, maximum fitting iterations, CPU workers, and the shared random seed |
+| LDA | Complete scikit-learn constructor parameters, LDA/pipeline seeds, and inactive options |
 | Data/output | CSV text/ID columns, document count, topic count, embedding dimensions when available, output identity/lock |
 | LLM settings | Endpoint, key registration/source with its value hidden, support/IS cutoff, feature cap, requests per feature |
 
@@ -138,7 +169,7 @@ A normal `run` prints the same summary, stops on local blocking issues, and othe
 
 These are **local checks**. They do not verify API authentication, endpoint connectivity, model access, or model memory requirements. No inference requests are made by `check` or `--dry-run`.
 
-For a notebook interface, [examples/start_here.ipynb](examples/start_here.ipynb) has separate cells for editable settings, a read-only setup report, hidden key input if needed, and execution. The first settings cell includes `n_topics`, `lda_max_iter`, `lda_jobs`, and `seed`; edit their values to configure LDA and the shared random seed. The equivalent Python check returns the complete report as a dictionary:
+For a notebook interface, [examples/start_here.ipynb](examples/start_here.ipynb) has separate cells for editable settings, a read-only setup report, hidden key input if needed, and execution. The first settings cell includes a **Scikit-learn LDA parameters** dictionary with all constructor options. The equivalent Python check returns the complete report as a dictionary:
 
 ```python
 from monotm import check_run

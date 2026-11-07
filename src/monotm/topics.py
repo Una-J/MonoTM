@@ -18,15 +18,22 @@ def feature_matrix(features):
     return matrix
 
 
+def make_lda(config):
+    """Resolve constructor options before training or model downloads."""
+    config.validate()
+    try:
+        return LatentDirichletAllocation(**config.lda_parameters())
+    except TypeError as exc:
+        raise ValueError(f"Invalid scikit-learn LDA parameters: {exc}") from None
+
+
 def fit_mixtures(features, config):
+    lda = make_lda(config)
     matrix = feature_matrix(features)
     feature_ids = np.flatnonzero(np.asarray(matrix.sum(0)).ravel() > 0)
     if not len(feature_ids):
         raise ValueError("Mixture SAE has no positive activations; adjust its configuration")
     matrix = matrix[:, feature_ids]
-    lda = LatentDirichletAllocation(n_components=config.n_topics, learning_method="batch",
-                                   max_iter=config.lda_max_iter, random_state=config.seed,
-                                   n_jobs=config.lda_jobs, evaluate_every=-1)
     theta = lda.fit_transform(matrix)
     return theta, lda.components_, feature_ids, np.asarray(matrix.sum(1)).ravel() > 0
 

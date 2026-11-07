@@ -95,6 +95,20 @@ def check_run(input_csv=None, output_dir=None, *, config=None, text_column="text
     core_missing = [name for name in packages[:4] if report["packages"][name] is None]
     if core_missing:
         errors.append("Missing core packages: " + ", ".join(core_missing) + "; install MonoTM first.")
+    report["lda"] = {"parameters": config.lda_parameters()}
+    if not core_missing:
+        try:
+            from .topics import make_lda
+            report["lda"]["parameters"] = make_lda(config).get_params(deep=False)
+        except (ValueError, ImportError, OSError) as exc:
+            errors.append(str(exc))
+    lda = report["lda"]["parameters"]
+    inactive = ["total_samples"]
+    if lda["learning_method"] == "batch":
+        inactive.extend(("learning_decay", "learning_offset", "batch_size"))
+    if lda["evaluate_every"] <= 0:
+        inactive.append("perp_tol")
+    report["lda"]["inactive_parameters"] = inactive
     corpus, dimension, manifest = None, None, None
     if input_csv and not core_missing:
         try:
@@ -213,8 +227,8 @@ def format_report(report):
     for role in ("mixture", "interpretation"):
         sae = report["sae"][role]
         lines.append(f"  {role.title()} SAE: dictionary={sae['dictionary_size'] or 'inferred later'}, width={sae['width_multiplier']} x dimension, K={sae['k']}, max steps={sae['max_steps']} [{stages[role + '_sae']}]")
-    lines += [f"  LDA: topics={config['n_topics']}, max iterations={config['lda_max_iter']}, CPU workers={config['lda_jobs']} [{stages['topic_mixtures']}]",
-              f"  Shared random seed: {config['seed']}",
+    lines += [f"  LDA: topics={config['n_topics']}, method={report['lda']['parameters']['learning_method']}, max iterations={config['lda_max_iter']}, n_jobs={config['lda_jobs']} [{stages['topic_mixtures']}]",
+              f"  Pipeline random seed: {config['seed']}; LDA random_state={report['lda']['parameters']['random_state']}",
               f"  Descriptor EM: {stages['descriptors']}",
               f"  Interpreter: {config['interpreter_model']}", f"  Predictor: {config['predictor_model']}",
               f"  LLM endpoint: {report['llm']['endpoint']} ({report['llm']['location']}; {stages['validation']})",
@@ -222,6 +236,9 @@ def format_report(report):
               f"API key: {'registered via ' + report['llm']['key_source'] if report['llm']['key_present'] else 'not registered'} (value hidden)",
               f"Validation: support >= {config['min_support']}, IS >= {config['is_threshold']}, feature cap={config['max_features'] or 'all eligible'}",
               f"LLM work: up to {report['llm']['requests_per_feature_max']} requests per feature before cache/retries"]
+    lines += ["", "Scikit-learn LDA parameters:",
+              json.dumps(report["lda"]["parameters"], indent=2, sort_keys=True),
+              "  Inactive for this fit: " + ", ".join(report["lda"]["inactive_parameters"])]
     for role in ("interpreter", "predictor"):
         parameters = report["llm"]["request_parameters"][role]
         lines.append(f"  {role.title()} request parameters: {json.dumps(parameters, sort_keys=True)}")

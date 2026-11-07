@@ -17,12 +17,13 @@ from scipy import sparse
 
 from . import __version__
 from .config import GenerationConfig, RunConfig
+from .lda_config import lda_parameters
 from .data import load_corpus, load_embeddings, validate_corpus_size, write_csv, write_json
 from .embeddings import embed_documents
 from .interpretation import PROMPT_DIR, pending_records, validate_features
 from .llm import ChatClient, LLMError
 from .sae import SAEFeatures, fit_sae
-from .topics import feature_matrix, fit_descriptors, fit_mixtures
+from .topics import feature_matrix, fit_descriptors, fit_mixtures, make_lda
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,13 @@ def run_fingerprint(corpus, config, embeddings_path=None, embedding_ids_path=Non
     """The same run identity is used by read-only checks and execution."""
     versions = _versions()
     identity_config = config.to_dict()
+    baseline_lda = lda_parameters(config, overrides=False)
+    lda_changes = {key: value for key, value in config.lda_parameters().items()
+                   if key not in baseline_lda or value != baseline_lda[key]}
+    if lda_changes:
+        identity_config["lda_params"] = lda_changes
+    else:
+        identity_config.pop("lda_params")
     for role in ("interpreter", "predictor"):
         key = role + "_generation"
         if identity_config[key] == GenerationConfig().to_dict():
@@ -185,6 +193,7 @@ def run(input_csv, output_dir, *, config=None, text_column="text", id_column=Non
     """
     config = config or RunConfig()
     config.validate()
+    effective_lda = make_lda(config).get_params(deep=False)
     corpus = load_corpus(input_csv, text_column, id_column)
     validate_corpus_size(len(corpus.ids), config)
     if embedding_ids_path and not embeddings_path:
@@ -215,6 +224,7 @@ def run(input_csv, output_dir, *, config=None, text_column="text", id_column=Non
                         "input_columns": {"text": text_column, "id": id_column},
                         "completed_stages": [], "validation_protocol": "disjoint label and balanced validation documents",
                         "embedding_source": "precomputed" if embeddings_path else config.embedding_model}
+        manifest["lda_parameters"] = effective_lda
         manifest["status"] = "running"
         manifest.pop("error", None)
         write_json(manifest_path, manifest)
