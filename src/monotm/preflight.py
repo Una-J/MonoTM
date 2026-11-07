@@ -213,7 +213,9 @@ def format_report(report):
     for role in ("mixture", "interpretation"):
         sae = report["sae"][role]
         lines.append(f"  {role.title()} SAE: dictionary={sae['dictionary_size'] or 'inferred later'}, width={sae['width_multiplier']} x dimension, K={sae['k']}, max steps={sae['max_steps']} [{stages[role + '_sae']}]")
-    lines += [f"  LDA: {stages['topic_mixtures']}; descriptor EM: {stages['descriptors']}",
+    lines += [f"  LDA: topics={config['n_topics']}, max iterations={config['lda_max_iter']}, CPU workers={config['lda_jobs']} [{stages['topic_mixtures']}]",
+              f"  Shared random seed: {config['seed']}",
+              f"  Descriptor EM: {stages['descriptors']}",
               f"  Interpreter: {config['interpreter_model']}", f"  Predictor: {config['predictor_model']}",
               f"  LLM endpoint: {report['llm']['endpoint']} ({report['llm']['location']}; {stages['validation']})",
               "  LLM device is managed by the endpoint, independent of --device.",

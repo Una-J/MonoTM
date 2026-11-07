@@ -119,6 +119,7 @@ The report shows:
 | Hardware | PyTorch/CUDA build, visible GPU names, total/free VRAM, Apple MPS availability |
 | Selected device | Requested `auto`/`cpu`/`cuda:0` and the device actually selected |
 | Execution | Which stages train, fit on CPU, use the chat endpoint, or reuse saved results |
+| LDA | Topic count, maximum fitting iterations, CPU workers, and the shared random seed |
 | Data/output | CSV text/ID columns, document count, topic count, embedding dimensions when available, output identity/lock |
 | LLM settings | Endpoint, key registration/source with its value hidden, support/IS cutoff, feature cap, requests per feature |
 
@@ -137,7 +138,7 @@ A normal `run` prints the same summary, stops on local blocking issues, and othe
 
 These are **local checks**. They do not verify API authentication, endpoint connectivity, model access, or model memory requirements. No inference requests are made by `check` or `--dry-run`.
 
-For a notebook interface, [examples/start_here.ipynb](examples/start_here.ipynb) has separate cells for editable settings, a read-only setup report, hidden key input if needed, and execution. The equivalent Python check returns the complete report as a dictionary:
+For a notebook interface, [examples/start_here.ipynb](examples/start_here.ipynb) has separate cells for editable settings, a read-only setup report, hidden key input if needed, and execution. The first settings cell includes `n_topics`, `lda_max_iter`, `lda_jobs`, and `seed`; edit their values to configure LDA and the shared random seed. The equivalent Python check returns the complete report as a dictionary:
 
 ```python
 from monotm import check_run
