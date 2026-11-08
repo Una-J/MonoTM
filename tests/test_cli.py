@@ -20,9 +20,13 @@ class CLITests(unittest.TestCase):
 
     def test_config_stdout_is_valid_json(self):
         out = io.StringIO()
-        with redirect_stdout(out):
+        notice = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(notice):
             self.assertEqual(main(["config"]), 0)
         self.assertEqual(json.loads(out.getvalue())["mixture"]["k"], 256)
+        self.assertIn("lda_params", notice.getvalue())
+        self.assertIn("sklearn.decomposition.LatentDirichletAllocation", notice.getvalue())
+        self.assertIn("https://scikit-learn.org/", notice.getvalue())
 
     def test_invalid_nested_config_is_a_user_error(self):
         with tempfile.TemporaryDirectory() as directory:

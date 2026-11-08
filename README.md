@@ -63,7 +63,7 @@ Without `--id-column`, IDs are generated from CSV row order. Empty text, empty s
 
 1. Generate L2-normalized, mean-pooled document embeddings using `nvidia/llama-embed-nemotron-8b`.
 2. Standardize the embeddings and train a mixture SAE with dictionary width `0.5 × embedding dimension` and Top-K activity 256.
-3. Fit LDA to its nonnegative activations to estimate document-topic mixtures **Θ**.
+3. Fit scikit-learn's `LatentDirichletAllocation` to its nonnegative activations to estimate document-topic mixtures **Θ**.
 4. Train an interpretation SAE with width `2 × embedding dimension` and activity 16.
 5. Label supported features with the Interpreter and validate the labels with a separate Predictor. Its activation-prediction F1 is the interpretability score **IS**.
 6. Retain nonempty labels with IS ≥ 0.8 and support ≥ 30 documents. Weight each retained activation by IS, then estimate the topic-feature distribution **B** using smoothed EM with **Θ fixed**.
@@ -78,6 +78,8 @@ monotm config --output settings.json
 monotm run --input my_documents.csv --topics 20 --config settings.json \
   --output runs/my_corpus
 ```
+
+In the generated JSON, **`lda_params` contains scikit-learn LDA parameters** for `sklearn.decomposition.LatentDirichletAllocation`. The configuration command prints this identification and the [official parameter reference](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.LatentDirichletAllocation.html). Its JSON output remains valid for redirection to a file. SAE, LLM validation, and descriptor EM settings are configured in their own sections.
 
 JSON files may contain only the settings you want to override. For example:
 
@@ -104,9 +106,9 @@ monotm run --input my_documents.csv --topics 20 --output runs/custom \
 
 ## Scikit-learn LDA parameters
 
-The `lda_params` dictionary uses the constructor names of scikit-learn's [`LatentDirichletAllocation`](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.LatentDirichletAllocation.html). `monotm config` writes the complete dictionary, and the first settings cell in [examples/start_here.ipynb](examples/start_here.ipynb) lists every parameter with an explanation. Edit the values directly:
+**These are scikit-learn's LDA constructor parameters:** `sklearn.decomposition.LatentDirichletAllocation`. MonoTM forwards the `lda_params` dictionary to this estimator. `monotm config` writes the complete dictionary, and the dedicated **Scikit-learn LDA parameters** section in [examples/start_here.ipynb](examples/start_here.ipynb) lists every parameter with an explanation and the [official reference](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.LatentDirichletAllocation.html). Edit the values directly:
 
-| Parameter | MonoTM default | Purpose |
+| Scikit-learn LDA parameter | MonoTM default | Purpose |
 |---|---|---|
 | `n_components` | `20` | Topic count throughout MonoTM, including Θ and descriptor outputs |
 | `doc_topic_prior` | `null` | Document-topic prior; `null` uses `1 / n_components` |
@@ -169,7 +171,7 @@ A normal `run` prints the same summary, stops on local blocking issues, and othe
 
 These are **local checks**. They do not verify API authentication, endpoint connectivity, model access, or model memory requirements. No inference requests are made by `check` or `--dry-run`.
 
-For a notebook interface, [examples/start_here.ipynb](examples/start_here.ipynb) has separate cells for editable settings, a read-only setup report, hidden key input if needed, and execution. The first settings cell includes a **Scikit-learn LDA parameters** dictionary with all constructor options. The equivalent Python check returns the complete report as a dictionary:
+For a notebook interface, [examples/start_here.ipynb](examples/start_here.ipynb) has separate settings sections for data, **Scikit-learn LDA parameters**, and **MonoTM models and execution settings**, followed by a read-only setup report, hidden key input if needed, and execution. The equivalent Python check returns the complete report as a dictionary:
 
 ```python
 from monotm import check_run

@@ -120,6 +120,7 @@ class RunConfig:
         return asdict(self)
 
     def lda_parameters(self):
+        """Resolved constructor parameters for sklearn.decomposition.LatentDirichletAllocation."""
         return lda_parameters(self)
 
     def generation_issues(self, roles=("interpreter", "predictor")):

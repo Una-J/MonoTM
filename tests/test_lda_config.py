@@ -12,6 +12,7 @@ from sklearn.decomposition import LatentDirichletAllocation
 
 from monotm.cli import main
 from monotm.config import GenerationConfig, RunConfig
+from monotm.lda_config import LDA_ESTIMATOR, LDA_REFERENCE_URL
 from monotm.pipeline import run, run_fingerprint
 from monotm.preflight import check_run, format_report
 from monotm.sae import SAEFeatures
@@ -23,10 +24,12 @@ class LDAParameterTests(unittest.TestCase):
     def test_notebook_exposes_every_constructor_parameter(self):
         root = Path(__file__).resolve().parents[1]
         notebook = json.loads((root / "examples/start_here.ipynb").read_text())
-        cell = next(c for c in notebook["cells"] if c["cell_type"] == "code"
-                    and "SKLEARN_LDA_PARAMS =" in "".join(c["source"]))
         namespace = {"Path": Path, "RunConfig": RunConfig, "GenerationConfig": GenerationConfig}
-        exec(compile("".join(cell["source"]), "start_here.ipynb", "exec"), namespace)
+        for cell in notebook["cells"]:
+            source = "".join(cell["source"])
+            if cell["cell_type"] == "code" and any(marker in source for marker in (
+                    "INPUT_CSV =", "SKLEARN_LDA_PARAMS =", "config = RunConfig(")):
+                exec(compile(source, "start_here.ipynb", "exec"), namespace)
         expected = set(LatentDirichletAllocation().get_params(deep=False))
         self.assertEqual(set(namespace["SKLEARN_LDA_PARAMS"]), expected)
         namespace["config"].validate()
@@ -104,6 +107,9 @@ class LDAPipelineTests(PipelineFixture, unittest.TestCase):
         self.assertEqual(report["lda"]["inactive_parameters"], ["total_samples"])
         self.assertIn('"doc_topic_prior": 0.2', format_report(report))
         self.assertIn("Scikit-learn LDA parameters:", format_report(report))
+        self.assertEqual(report["lda"]["estimator"], LDA_ESTIMATOR)
+        self.assertIn(LDA_ESTIMATOR, format_report(report))
+        self.assertIn(LDA_REFERENCE_URL, format_report(report))
 
     def test_invalid_keyword_blocks_before_training_and_writes(self):
         config = replace(self.config, lda_params={"not_a_parameter": 1})

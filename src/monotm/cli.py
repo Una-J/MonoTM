@@ -10,6 +10,7 @@ import sys
 from . import __version__
 from .config import GenerationConfig, RunConfig
 from .generation import REASONING_EFFORTS, TOKEN_PARAMETERS
+from .lda_config import LDA_ESTIMATOR, LDA_REFERENCE_URL
 
 
 def _temperature(value):
@@ -49,7 +50,7 @@ def _run_options(run, *, required):
     run.add_argument("--topics", type=int, help="Number of topics; overrides JSON n_topics and lda_params.n_components")
     run.add_argument("--text-column", default="text")
     run.add_argument("--id-column", help="Optional unique string ID column; otherwise generated from row order")
-    run.add_argument("--config", type=Path, help="JSON config; --topics and explicitly supplied options override it")
+    run.add_argument("--config", type=Path, help="JSON config; lda_params contains scikit-learn LDA parameters; explicit CLI options override it")
     run.add_argument("--embeddings", type=Path, help="Optional precomputed .npy document matrix")
     run.add_argument("--embedding-ids", type=Path, help="Optional JSON array of embedding IDs for explicit row alignment")
     run.add_argument("--embedding-model")
@@ -83,7 +84,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="monotm", description="Topic modeling with full-feature mixtures and validated semantic descriptors")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
-    defaults = commands.add_parser("config", help="Print the default JSON configuration")
+    defaults = commands.add_parser("config", help="Print the default JSON configuration",
+                                   description=f"Generate editable JSON settings. lda_params contains scikit-learn LDA constructor parameters for {LDA_ESTIMATOR}. Reference: {LDA_REFERENCE_URL}")
     defaults.add_argument("--output", type=Path, help="Write JSON to a new file instead of stdout")
     check = commands.add_parser("check", help="Review effective settings, GPUs, credentials and inputs without executing")
     _run_options(check, required=False)
@@ -129,7 +131,8 @@ def main(argv=None):
                 with args.output.open("x", encoding="utf-8") as handle:
                     handle.write(text)
             else:
-                print(text, end="")
+                print(text, end="", flush=True)
+            print(f"lda_params: scikit-learn LDA parameters for {LDA_ESTIMATOR}.\nReference: {LDA_REFERENCE_URL}", file=sys.stderr)
             return 0
         if args.command == "inspect":
             from .recovery import inspect_run

@@ -5,6 +5,10 @@ import json
 import math
 
 
+LDA_ESTIMATOR = "sklearn.decomposition.LatentDirichletAllocation"
+LDA_REFERENCE_URL = "https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.LatentDirichletAllocation.html"
+
+
 LDA_DEFAULTS = {
     "n_components": 20,
     "doc_topic_prior": None,

@@ -9,6 +9,7 @@ import platform
 from urllib.parse import urlparse
 
 from .config import RunConfig
+from .lda_config import LDA_ESTIMATOR, LDA_REFERENCE_URL
 
 
 def _package_version(name):
@@ -95,7 +96,8 @@ def check_run(input_csv=None, output_dir=None, *, config=None, text_column="text
     core_missing = [name for name in packages[:4] if report["packages"][name] is None]
     if core_missing:
         errors.append("Missing core packages: " + ", ".join(core_missing) + "; install MonoTM first.")
-    report["lda"] = {"parameters": config.lda_parameters()}
+    report["lda"] = {"estimator": LDA_ESTIMATOR, "documentation_url": LDA_REFERENCE_URL,
+                     "parameters": config.lda_parameters()}
     if not core_missing:
         try:
             from .topics import make_lda
@@ -237,6 +239,9 @@ def format_report(report):
               f"Validation: support >= {config['min_support']}, IS >= {config['is_threshold']}, feature cap={config['max_features'] or 'all eligible'}",
               f"LLM work: up to {report['llm']['requests_per_feature_max']} requests per feature before cache/retries"]
     lines += ["", "Scikit-learn LDA parameters:",
+              f"  Estimator: {report['lda']['estimator']}",
+              "  Configuration key: lda_params",
+              f"  Reference: {report['lda']['documentation_url']}",
               json.dumps(report["lda"]["parameters"], indent=2, sort_keys=True),
               "  Inactive for this fit: " + ", ".join(report["lda"]["inactive_parameters"])]
     for role in ("interpreter", "predictor"):
