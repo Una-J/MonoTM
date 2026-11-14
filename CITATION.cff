@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use MonoTM, please cite the paper below."
+title: "MonoTM"
+abstract: "Topic mixtures from sparse autoencoder features, with validated semantic descriptors."
+type: software
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/Una-J/MonoTM"
+keywords:
+  - topic modeling
+  - sparse autoencoders
+  - interpretability
+  - natural language processing
+authors:
+  - family-names: Joh
+    given-names: Una
+    affiliation: "School of Information Studies, Syracuse University"
+  - family-names: Yu
+    given-names: Bei
+    affiliation: "School of Information Studies, Syracuse University"
+preferred-citation:
+  type: conference-paper
+  title: "Beyond Top Words: MonoTM for Topic Modeling with Interpretable Monosemantic Features"
+  authors:
+    - family-names: Joh
+      given-names: Una
+    - family-names: Yu
+      given-names: Bei
+  collection-title: "Findings of the Association for Computational Linguistics: IJCNLP-AACL 2026"
+  publisher:
+    name: "Association for Computational Linguistics"
+  conference:
+    name: "IJCNLP-AACL 2026"
+    city: Hengqin
+    country: CN
+  year: 2026
+  month: 11
+  start: 645
+  end: 682
+  doi: "10.18653/2026.findings-aacl.34"
+  url: "https://aclanthology.org/2026.findings-aacl.34/"

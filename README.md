@@ -1,6 +1,6 @@
 # MonoTM
 
-Topic modeling with interpretable semantic features, accompanying **Beyond Top Words: MonoTM for Topic Modeling with Interpretable Monosemantic Features**, by Una Joh and Bei Yu (AACL-IJCNLP 2026).
+Topic modeling with interpretable semantic features, accompanying **Beyond Top Words: MonoTM for Topic Modeling with Interpretable Monosemantic Features**, by Una Joh and Bei Yu, in *Findings of the Association for Computational Linguistics: IJCNLP-AACL 2026* ([paper](https://aclanthology.org/2026.findings-aacl.34/), [DOI](https://doi.org/10.18653/2026.findings-aacl.34)).
 
 MonoTM estimates document-topic mixtures from **all positive SAE feature activations**, then learns topic descriptions from a separate vocabulary of **validated semantic features**, with the mixtures held fixed. Each topic is described by ranked feature labels rather than only top words.
 
@@ -416,6 +416,32 @@ python -m unittest discover -s tests -v
 
 The test suite covers SAE training, LDA, fixed-mixture EM, ID alignment, validation sampling, response parsing, caching, retries, setup checks, and device selection. Tests use synthetic embeddings, mocked HTTP responses, and mocked GPU probes without model downloads or external inference requests.
 
+## Citation
+
+If you use MonoTM, please cite the paper:
+
+```bibtex
+@inproceedings{joh-yu-2026-beyond,
+    title = "Beyond Top Words: {M}ono{TM} for Topic Modeling with Interpretable Monosemantic Features",
+    author = "Joh, Una  and
+      Yu, Bei",
+    booktitle = "Findings of the {A}ssociation for {C}omputational {L}inguistics: {IJCNLP}-{AACL} 2026",
+    month = nov,
+    year = "2026",
+    address = "Hengqin, China",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2026.findings-aacl.34/",
+    doi = "10.18653/2026.findings-aacl.34",
+    pages = "645--682"
+}
+```
+
+GitHub's **Cite this repository** button uses [CITATION.cff](CITATION.cff).
+
 ## Authors
 
 Una Joh (`sjoh01@syr.edu`) and Bei Yu (`byu@syr.edu`), School of Information Studies, Syracuse University.
+
+## License
+
+MonoTM is released under the [MIT License](LICENSE). Embedding and chat models downloaded or called at run time are subject to their own terms.

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -9,6 +9,7 @@ description = "Topic mixtures from sparse features, with validated semantic desc
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{name = "Una Joh"}, {name = "Bei Yu"}]
+license = "MIT"
 dependencies = [
   "numpy>=1.24,<3",
   "scipy>=1.10,<2",
@@ -24,6 +25,7 @@ monotm = "monotm.cli:main"
 
 [project.urls]
 Repository = "https://github.com/Una-J/MonoTM"
+Paper = "https://aclanthology.org/2026.findings-aacl.34/"
 
 [tool.setuptools.packages.find]
 where = ["src"]
